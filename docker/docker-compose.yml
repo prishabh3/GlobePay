@@ -1,0 +1,326 @@
+version: '3.8'
+
+services:
+  # Databases
+  postgres-auth:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: globepay
+      POSTGRES_PASSWORD: globepay_secret
+      POSTGRES_DB: globepay_auth
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U globepay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-user:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: globepay
+      POSTGRES_PASSWORD: globepay_secret
+      POSTGRES_DB: globepay_user
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U globepay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-wallet:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: globepay
+      POSTGRES_PASSWORD: globepay_secret
+      POSTGRES_DB: globepay_wallet
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U globepay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-transaction:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: globepay
+      POSTGRES_PASSWORD: globepay_secret
+      POSTGRES_DB: globepay_transaction
+    ports:
+      - "5436:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U globepay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-credit:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: globepay
+      POSTGRES_PASSWORD: globepay_secret
+      POSTGRES_DB: globepay_credit
+    ports:
+      - "5437:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U globepay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-notification:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: globepay
+      POSTGRES_PASSWORD: globepay_secret
+      POSTGRES_DB: globepay_notification
+    ports:
+      - "5438:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U globepay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-card:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: globepay
+      POSTGRES_PASSWORD: globepay_secret
+      POSTGRES_DB: globepay_card
+    ports:
+      - "5439:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U globepay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # ── Application Services ────────────────────────────────────────────────────
+
+  api-gateway:
+    build:
+      context: ../backend/api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      AUTH_SERVICE_HOST: auth-service
+      USER_SERVICE_HOST: user-service
+      WALLET_SERVICE_HOST: wallet-service
+      TRANSACTION_SERVICE_HOST: transaction-service
+      CREDIT_SERVICE_HOST: credit-scoring-service
+      CARD_SERVICE_HOST: card-service
+      BANK_SERVICE_HOST: bank-integration-service
+      NOTIFICATION_SERVICE_HOST: notification-service
+      REDIS_HOST: redis
+      JWT_SECRET: dGhpcyBpcyBhIHZlcnkgc2VjdXJlIHNlY3JldCBrZXkgZm9yIEdsb2JlUGF5IGF1dGhlbnRpY2F0aW9u
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: on-failure
+
+  auth-service:
+    build:
+      context: ../backend/auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: postgres-auth
+      DB_PORT: 5432
+      DB_NAME: globepay_auth
+      DB_USER: globepay
+      DB_PASSWORD: globepay_secret
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SECRET: dGhpcyBpcyBhIHZlcnkgc2VjdXJlIHNlY3JldCBrZXkgZm9yIEdsb2JlUGF5IGF1dGhlbnRpY2F0aW9u
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: on-failure
+
+  user-service:
+    build:
+      context: ../backend/user-service
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      DB_HOST: postgres-user
+      DB_PORT: 5432
+      DB_NAME: globepay_user
+      DB_USER: globepay
+      DB_PASSWORD: globepay_secret
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres-user:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: on-failure
+
+  wallet-service:
+    build:
+      context: ../backend/wallet-service
+      dockerfile: Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      DB_HOST: postgres-wallet
+      DB_PORT: 5432
+      DB_NAME: globepay_wallet
+      DB_USER: globepay
+      DB_PASSWORD: globepay_secret
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres-wallet:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: on-failure
+
+  transaction-service:
+    build:
+      context: ../backend/transaction-service
+      dockerfile: Dockerfile
+    ports:
+      - "8084:8084"
+    environment:
+      DB_HOST: postgres-transaction
+      DB_PORT: 5432
+      DB_NAME: globepay_transaction
+      DB_USER: globepay
+      DB_PASSWORD: globepay_secret
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      WALLET_SERVICE_URL: http://wallet-service:8083
+    depends_on:
+      postgres-transaction:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: on-failure
+
+  credit-scoring-service:
+    build:
+      context: ../backend/credit-scoring-service
+      dockerfile: Dockerfile
+    ports:
+      - "8085:8085"
+    environment:
+      DB_HOST: postgres-credit
+      DB_PORT: 5432
+      DB_NAME: globepay_credit
+      DB_USER: globepay
+      DB_PASSWORD: globepay_secret
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres-credit:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: on-failure
+
+  card-service:
+    build:
+      context: ../backend/card-service
+      dockerfile: Dockerfile
+    ports:
+      - "8086:8086"
+    environment:
+      DB_HOST: postgres-card
+      DB_PORT: 5432
+      DB_NAME: globepay_card
+      DB_USER: globepay
+      DB_PASSWORD: globepay_secret
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres-card:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: on-failure
+
+  bank-integration-service:
+    build:
+      context: ../backend/bank-integration-service
+      dockerfile: Dockerfile
+    ports:
+      - "8087:8087"
+    restart: on-failure
+
+  notification-service:
+    build:
+      context: ../backend/notification-service
+      dockerfile: Dockerfile
+    ports:
+      - "8088:8088"
+    environment:
+      DB_HOST: postgres-notification
+      DB_PORT: 5432
+      DB_NAME: globepay_notification
+      DB_USER: globepay
+      DB_PASSWORD: globepay_secret
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres-notification:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: on-failure

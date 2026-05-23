@@ -1,0 +1,33 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: credit-scoring-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5437}/${DB_NAME:globepay_credit}
+    username: ${DB_USER:globepay}
+    password: ${DB_PASSWORD:globepay_secret}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: credit-scoring-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.globepay.shared.event"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
