@@ -4,11 +4,11 @@ interface BadgeProps {
 }
 
 const variantClasses: Record<string, string> = {
-  success: 'bg-green-900/50 text-green-400 border border-green-700',
-  warning: 'bg-yellow-900/50 text-yellow-400 border border-yellow-700',
-  danger: 'bg-red-900/50 text-red-400 border border-red-700',
-  info: 'bg-blue-900/50 text-blue-400 border border-blue-700',
-  default: 'bg-slate-700 text-slate-300 border border-slate-600',
+  success: 'bg-green-50 text-green-700 ring-1 ring-green-200',
+  warning: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+  danger: 'bg-red-50 text-red-700 ring-1 ring-red-200',
+  info: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
+  default: 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
 };
 
 export function statusVariant(status: string): BadgeProps['variant'] {
@@ -22,7 +22,7 @@ export function statusVariant(status: string): BadgeProps['variant'] {
 
 export default function Badge({ text, variant = 'default' }: BadgeProps) {
   return (
-    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${variantClasses[variant]}`}>
+    <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full ${variantClasses[variant]}`}>
       {text}
     </span>
   );

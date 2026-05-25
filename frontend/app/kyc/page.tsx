@@ -9,6 +9,8 @@ import { isAuthenticated } from '@/lib/auth';
 import { userService } from '@/services/user.service';
 
 const DOCUMENT_TYPES = ['PASSPORT', 'VISA', 'NATIONAL_ID', 'DRIVERS_LICENSE'];
+const inputClass = 'w-full bg-white border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition';
+const labelClass = 'block text-sm font-medium text-gray-700 mb-1.5';
 
 export default function KycPage() {
   const router = useRouter();
@@ -23,23 +25,17 @@ export default function KycPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleUpload = async (e: React.FormEvent) => {
+  const handleUpload = async (e: React.BaseSyntheticEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
-
-    if (!file) {
-      setError('Please select a file to upload.');
-      return;
-    }
-
+    if (!file) { setError('Please select a file to upload.'); return; }
     setLoading(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
       const uploadRes = await userService.uploadFile(formData);
       const documentUrl = uploadRes.data.data.url;
-
       await userService.uploadDocument({ ...form, documentUrl });
       setSuccess('Document uploaded successfully. Pending review.');
       setFile(null);
@@ -52,39 +48,33 @@ export default function KycPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <main className="max-w-3xl mx-auto p-6 space-y-6">
-        <h1 className="text-2xl font-bold">KYC Verification</h1>
+      <main className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+        <h1 className="text-2xl font-bold text-gray-900">KYC Verification</h1>
 
-        {/* Status banner */}
         {kycStatus && (
-          <Card>
+          <Card className="p-5">
             <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <p className="text-slate-400 text-sm">Overall Status</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge text={kycStatus.overallStatus} variant={statusVariant(kycStatus.overallStatus)} />
-                </div>
-                <p className="text-slate-400 text-sm mt-2">{kycStatus.message}</p>
+              <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Overall Status</p>
+                <Badge text={kycStatus.overallStatus} variant={statusVariant(kycStatus.overallStatus)} />
+                <p className="text-sm text-gray-500 mt-2">{kycStatus.message}</p>
               </div>
             </div>
           </Card>
         )}
 
-        {/* Uploaded documents */}
         {kycStatus?.documents && kycStatus.documents.length > 0 && (
           <section>
-            <h2 className="text-lg font-semibold mb-3">Submitted Documents</h2>
+            <h2 className="text-base font-semibold text-gray-700 mb-3">Submitted Documents</h2>
             <div className="space-y-3">
               {kycStatus.documents.map((doc: any) => (
-                <Card key={doc.id} className="flex items-center justify-between">
+                <Card key={doc.id} className="p-4 flex items-center justify-between">
                   <div>
-                    <p className="font-medium">{doc.documentType}</p>
-                    <p className="text-slate-400 text-sm">#{doc.documentNumber}</p>
-                    {doc.rejectionReason && (
-                      <p className="text-red-400 text-sm mt-1">Reason: {doc.rejectionReason}</p>
-                    )}
+                    <p className="font-medium text-gray-900">{doc.documentType}</p>
+                    <p className="text-gray-400 text-sm">#{doc.documentNumber}</p>
+                    {doc.rejectionReason && <p className="text-red-500 text-sm mt-1">{doc.rejectionReason}</p>}
                   </div>
                   <Badge text={doc.status} variant={statusVariant(doc.status)} />
                 </Card>
@@ -93,68 +83,49 @@ export default function KycPage() {
           </section>
         )}
 
-        {/* Upload form */}
         <section>
-          <h2 className="text-lg font-semibold mb-3">Upload Document</h2>
-          <Card>
-            <form onSubmit={handleUpload} className="space-y-4">
+          <h2 className="text-base font-semibold text-gray-700 mb-3">Upload Document</h2>
+          <Card className="p-6">
+            <form onSubmit={handleUpload} className="space-y-5">
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Document Type</label>
-                <select
-                  value={form.documentType}
-                  onChange={e => setForm({ ...form, documentType: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
-                >
-                  {DOCUMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                <label className={labelClass}>Document Type</label>
+                <select value={form.documentType} onChange={e => setForm({ ...form, documentType: e.target.value })} className={inputClass}>
+                  {DOCUMENT_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Document Number</label>
-                <input
-                  required
-                  value={form.documentNumber}
-                  onChange={e => setForm({ ...form, documentNumber: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                  placeholder="e.g. A1234567"
-                />
+                <label className={labelClass}>Document Number</label>
+                <input required value={form.documentNumber} onChange={e => setForm({ ...form, documentNumber: e.target.value })} className={inputClass} placeholder="e.g. A1234567" />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Document File</label>
-                <label className="flex items-center justify-center w-full h-28 border-2 border-dashed border-slate-600 rounded-lg cursor-pointer bg-slate-900 hover:border-blue-500 transition-colors">
+                <label className={labelClass}>Document File</label>
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-blue-400 transition-colors">
                   <div className="text-center">
                     {file ? (
-                      <p className="text-white text-sm">{file.name}</p>
+                      <>
+                        <p className="text-sm font-medium text-blue-600">{file.name}</p>
+                        <p className="text-xs text-gray-400 mt-1">Click to change</p>
+                      </>
                     ) : (
                       <>
-                        <p className="text-slate-400 text-sm">Click to select a file</p>
-                        <p className="text-slate-500 text-xs mt-1">PDF, JPG, PNG up to 10MB</p>
+                        <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <p className="text-sm text-gray-500">Click to select a file</p>
+                        <p className="text-xs text-gray-400 mt-1">PDF, JPG, PNG up to 10MB</p>
                       </>
                     )}
                   </div>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={e => setFile(e.target.files?.[0] ?? null)}
-                  />
+                  <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={e => setFile(e.target.files?.[0] ?? null)} />
                 </label>
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Expiry Date (optional)</label>
-                <input
-                  type="date"
-                  value={form.expiryDate}
-                  onChange={e => setForm({ ...form, expiryDate: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
-                />
+                <label className={labelClass}>Expiry Date (optional)</label>
+                <input type="date" value={form.expiryDate} onChange={e => setForm({ ...form, expiryDate: e.target.value })} className={inputClass} />
               </div>
-              {error && <p className="text-red-400 text-sm">{error}</p>}
-              {success && <p className="text-green-400 text-sm">{success}</p>}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors"
-              >
+              {error && <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</p>}
+              {success && <p className="text-green-600 text-sm bg-green-50 border border-green-200 rounded-xl px-4 py-3">{success}</p>}
+              <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors">
                 {loading ? 'Uploading…' : 'Upload Document'}
               </button>
             </form>

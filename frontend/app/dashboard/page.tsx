@@ -1,11 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import Navbar from '@/components/layout/Navbar';
 import Card from '@/components/ui/Card';
 import Badge, { statusVariant } from '@/components/ui/Badge';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { isAuthenticated } from '@/lib/auth';
 import { userService } from '@/services/user.service';
 import { walletService } from '@/services/wallet.service';
@@ -14,10 +13,7 @@ import { creditService } from '@/services/credit.service';
 
 export default function DashboardPage() {
   const router = useRouter();
-
-  useEffect(() => {
-    if (!isAuthenticated()) router.push('/login');
-  }, [router]);
+  useEffect(() => { if (!isAuthenticated()) router.push('/login'); }, [router]);
 
   const { data: profileRes } = useSWR('/users/me', () => userService.getProfile());
   const { data: walletsRes } = useSWR('/wallets', () => walletService.getWallets());
@@ -30,42 +26,49 @@ export default function DashboardPage() {
   const credit = creditRes?.data?.data;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <main className="max-w-6xl mx-auto p-6 space-y-6">
+      <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">
-              {profile ? `Welcome, ${profile.firstName}` : 'Dashboard'}
+            <h1 className="text-2xl font-bold text-gray-900">
+              {profile ? `Welcome back, ${profile.firstName}` : 'Dashboard'}
             </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              KYC Status:{' '}
+            <div className="flex items-center gap-2 mt-1.5">
+              <span className="text-sm text-gray-500">KYC Status</span>
               {profile && <Badge text={profile.kycStatus} variant={statusVariant(profile.kycStatus)} />}
-            </p>
+            </div>
           </div>
+          <button
+            onClick={() => router.push('/transfer')}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
+          >
+            Send Money
+          </button>
         </div>
 
         {/* Wallets */}
         <section>
-          <h2 className="text-lg font-semibold mb-3">Wallets</h2>
+          <h2 className="text-base font-semibold text-gray-700 mb-3">Wallets</h2>
           {wallets.length === 0 ? (
-            <Card>
-              <p className="text-slate-400 text-sm">No wallets yet. Complete KYC to get started.</p>
+            <Card className="p-6">
+              <p className="text-gray-400 text-sm">No wallets yet. Complete KYC to get started.</p>
             </Card>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {wallets.map((w: any) => (
-                <Card key={w.id}>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-slate-400 text-sm font-medium">{w.currency} Wallet</span>
+                <div key={w.id} className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-medium text-gray-500">{w.currency} Wallet</span>
                     <Badge text={w.status} variant={statusVariant(w.status)} />
                   </div>
-                  <p className="text-3xl font-bold">
+                  <p className="text-3xl font-bold text-gray-900 tracking-tight">
                     {Number(w.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </p>
-                  <p className="text-slate-400 text-sm mt-1">{w.currency}</p>
-                </Card>
+                  <p className="text-sm text-gray-400 mt-1">{w.currency}</p>
+                </div>
               ))}
             </div>
           )}
@@ -74,19 +77,21 @@ export default function DashboardPage() {
         {/* Credit Score */}
         {credit && (
           <section>
-            <h2 className="text-lg font-semibold mb-3">Credit Summary</h2>
-            <Card>
-              <div className="flex items-center gap-8">
+            <h2 className="text-base font-semibold text-gray-700 mb-3">Credit Summary</h2>
+            <Card className="p-6">
+              <div className="flex items-center gap-10">
                 <div>
-                  <p className="text-slate-400 text-sm">Credit Score</p>
-                  <p className="text-4xl font-bold text-blue-400">{credit.creditScore}</p>
+                  <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Credit Score</p>
+                  <p className="text-4xl font-bold text-blue-600">{credit.creditScore}</p>
                 </div>
+                <div className="w-px h-12 bg-gray-100" />
                 <div>
-                  <p className="text-slate-400 text-sm">Credit Limit</p>
-                  <p className="text-2xl font-bold">${Number(credit.creditLimit).toLocaleString()}</p>
+                  <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Credit Limit</p>
+                  <p className="text-2xl font-bold text-gray-900">${Number(credit.creditLimit).toLocaleString()}</p>
                 </div>
+                <div className="w-px h-12 bg-gray-100" />
                 <div>
-                  <p className="text-slate-400 text-sm">Risk Level</p>
+                  <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Risk Level</p>
                   <Badge text={credit.riskLevel} variant={statusVariant(credit.riskLevel === 'LOW' ? 'ACTIVE' : credit.riskLevel === 'MEDIUM' ? 'PENDING' : 'FAILED')} />
                 </div>
               </div>
@@ -97,31 +102,31 @@ export default function DashboardPage() {
         {/* Recent Transactions */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold">Recent Transactions</h2>
-            <button onClick={() => router.push('/transactions')} className="text-blue-400 text-sm hover:underline">
+            <h2 className="text-base font-semibold text-gray-700">Recent Transactions</h2>
+            <button onClick={() => router.push('/transactions')} className="text-blue-600 text-sm font-medium hover:underline">
               View all
             </button>
           </div>
           <Card className="p-0 overflow-hidden">
             {transactions.length === 0 ? (
-              <p className="text-slate-400 text-sm p-6">No transactions yet.</p>
+              <p className="text-gray-400 text-sm p-6">No transactions yet.</p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-700 text-slate-400">
-                    <th className="text-left p-4">Type</th>
-                    <th className="text-left p-4">Amount</th>
-                    <th className="text-left p-4">Status</th>
-                    <th className="text-left p-4">Date</th>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Amount</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-50">
                   {transactions.map((tx: any) => (
-                    <tr key={tx.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                      <td className="p-4 capitalize">{tx.type.toLowerCase()}</td>
-                      <td className="p-4 font-medium">{tx.amount} {tx.currency}</td>
-                      <td className="p-4"><Badge text={tx.status} variant={statusVariant(tx.status)} /></td>
-                      <td className="p-4 text-slate-400">{new Date(tx.createdAt).toLocaleDateString()}</td>
+                    <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-5 py-3.5 capitalize text-gray-700">{tx.type.toLowerCase()}</td>
+                      <td className="px-5 py-3.5 font-semibold text-gray-900">{tx.amount} {tx.currency}</td>
+                      <td className="px-5 py-3.5"><Badge text={tx.status} variant={statusVariant(tx.status)} /></td>
+                      <td className="px-5 py-3.5 text-gray-400">{new Date(tx.createdAt).toLocaleDateString()}</td>
                     </tr>
                   ))}
                 </tbody>

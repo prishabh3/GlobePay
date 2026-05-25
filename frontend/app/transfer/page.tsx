@@ -9,6 +9,9 @@ import { isAuthenticated } from '@/lib/auth';
 import { walletService } from '@/services/wallet.service';
 import { transactionService } from '@/services/transaction.service';
 
+const inputClass = 'w-full bg-white border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition';
+const labelClass = 'block text-sm font-medium text-gray-700 mb-1.5';
+
 export default function TransferPage() {
   const router = useRouter();
   useEffect(() => { if (!isAuthenticated()) router.push('/login'); }, [router]);
@@ -16,19 +19,12 @@ export default function TransferPage() {
   const { data: walletsRes } = useSWR('/wallets', () => walletService.getWallets());
   const wallets = walletsRes?.data?.data ?? [];
 
-  const [form, setForm] = useState({
-    fromWalletId: '',
-    toWalletId: '',
-    toUserId: '',
-    amount: '',
-    currency: 'USD',
-    description: '',
-  });
+  const [form, setForm] = useState({ fromWalletId: '', toWalletId: '', toUserId: '', amount: '', currency: 'USD', description: '' });
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.BaseSyntheticEvent) => {
     e.preventDefault();
     setError('');
     setResult(null);
@@ -52,14 +48,14 @@ export default function TransferPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <main className="max-w-2xl mx-auto p-6">
-        <h1 className="text-2xl font-bold mb-6">Send Money</h1>
-        <Card>
-          <form onSubmit={handleSubmit} className="space-y-4">
+      <main className="max-w-2xl mx-auto px-6 py-8">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Send Money</h1>
+        <Card className="p-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm text-slate-400 mb-1">From Wallet</label>
+              <label className={labelClass}>From Wallet</label>
               <select
                 required
                 value={form.fromWalletId}
@@ -67,93 +63,49 @@ export default function TransferPage() {
                   const wallet = wallets.find((w: any) => w.id === e.target.value);
                   setForm({ ...form, fromWalletId: e.target.value, currency: wallet?.currency ?? 'USD' });
                 }}
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
+                className={inputClass}
               >
                 <option value="">Select wallet</option>
                 {wallets.map((w: any) => (
-                  <option key={w.id} value={w.id}>
-                    {w.currency} — Balance: {Number(w.balance).toFixed(2)}
-                  </option>
+                  <option key={w.id} value={w.id}>{w.currency} — Balance: {Number(w.balance).toFixed(2)}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Recipient Wallet ID</label>
-              <input
-                required
-                value={form.toWalletId}
-                onChange={e => setForm({ ...form, toWalletId: e.target.value })}
-                placeholder="UUID of destination wallet"
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-              />
+              <label className={labelClass}>Recipient Wallet ID</label>
+              <input required value={form.toWalletId} onChange={e => setForm({ ...form, toWalletId: e.target.value })} placeholder="UUID of destination wallet" className={inputClass} />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Recipient User ID</label>
-              <input
-                required
-                value={form.toUserId}
-                onChange={e => setForm({ ...form, toUserId: e.target.value })}
-                placeholder="UUID of recipient user"
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-              />
+              <label className={labelClass}>Recipient User ID</label>
+              <input required value={form.toUserId} onChange={e => setForm({ ...form, toUserId: e.target.value })} placeholder="UUID of recipient user" className={inputClass} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Amount</label>
-                <input
-                  type="number"
-                  required
-                  min="0.01"
-                  step="0.01"
-                  value={form.amount}
-                  onChange={e => setForm({ ...form, amount: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
-                />
+                <label className={labelClass}>Amount</label>
+                <input type="number" required min="0.01" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className={inputClass} />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Currency</label>
-                <input
-                  value={form.currency}
-                  readOnly
-                  className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-slate-400 cursor-not-allowed"
-                />
+                <label className={labelClass}>Currency</label>
+                <input value={form.currency} readOnly className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-400 cursor-not-allowed" />
               </div>
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Description (optional)</label>
-              <input
-                value={form.description}
-                onChange={e => setForm({ ...form, description: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                placeholder="e.g. Rent payment"
-              />
+              <label className={labelClass}>Description (optional)</label>
+              <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="e.g. Rent payment" className={inputClass} />
             </div>
-            {error && <p className="text-red-400 text-sm">{error}</p>}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors"
-            >
+            {error && <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</p>}
+            <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors">
               {loading ? 'Sending…' : 'Send Money'}
             </button>
           </form>
 
           {result && (
-            <div className="mt-6 p-4 bg-slate-900 rounded-lg border border-slate-600">
-              <h3 className="font-semibold mb-3">Transfer Result</h3>
-              <div className="space-y-2 text-sm text-slate-300">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Transaction ID</span>
-                  <span className="font-mono text-xs">{result.id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Status</span>
-                  <Badge text={result.status} variant={statusVariant(result.status)} />
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Amount</span>
-                  <span>{result.amount} {result.currency}</span>
-                </div>
+            <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+              <h3 className="font-semibold text-green-800 mb-3">Transfer Successful</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-gray-500">Transaction ID</span><span className="font-mono text-xs text-gray-700">{result.id}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Status</span><Badge text={result.status} variant={statusVariant(result.status)} /></div>
+                <div className="flex justify-between"><span className="text-gray-500">Amount</span><span className="font-semibold">{result.amount} {result.currency}</span></div>
               </div>
             </div>
           )}
