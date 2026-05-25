@@ -15,8 +15,9 @@
 	<name>GlobePay Backend</name>
 	<description>GlobePay Microservices Platform</description>
 	<properties>
-		<java.version>21</java.version>
+		<java.version>17</java.version>
 		<spring-cloud.version>2023.0.1</spring-cloud.version>
+		<lombok.version>1.18.34</lombok.version>
 	</properties>
 	<modules>
 		<module>shared</module>
@@ -40,6 +41,12 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+			<!-- Override Spring Boot managed Lombok version -->
+			<dependency>
+				<groupId>org.projectlombok</groupId>
+				<artifactId>lombok</artifactId>
+				<version>${lombok.version}</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
@@ -49,8 +56,15 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
-					<source>21</source>
-					<target>21</target>
+					<source>17</source>
+					<target>17</target>
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+							<version>${lombok.version}</version>
+						</path>
+					</annotationProcessorPaths>
 				</configuration>
 			</plugin>
 		</plugins>

@@ -8,20 +8,24 @@ export default function RegisterPage() {
   const router = useRouter();
   const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '' });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
     setLoading(true);
     try {
-      const res = await authService.register(form);
-      const { accessToken, refreshToken } = res.data.data;
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-      router.push('/dashboard');
+      await authService.register(form);
+      localStorage.clear();
+      setSuccess(true);
+      setTimeout(() => router.push('/login'), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed.');
+      setError(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -40,6 +44,27 @@ export default function RegisterPage() {
       />
     </div>
   );
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md text-center">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-10">
+            <div className="text-green-400 text-5xl mb-4">✓</div>
+            <h2 className="text-2xl font-bold text-white mb-2">Account Created!</h2>
+            <p className="text-slate-400 mb-1">Welcome to GlobePay, {form.firstName}.</p>
+            <p className="text-slate-500 text-sm">Redirecting you to login in 3 seconds…</p>
+            <button
+              onClick={() => router.push('/login')}
+              className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors"
+            >
+              Sign In Now
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
@@ -60,6 +85,7 @@ export default function RegisterPage() {
             </div>
             {field('email', 'Email', 'email', 'you@example.com')}
             {field('password', 'Password', 'password', '••••••••')}
+            <p className="text-xs text-slate-500 -mt-2">Must be at least 8 characters.</p>
             <button
               type="submit"
               disabled={loading}

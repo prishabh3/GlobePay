@@ -39,6 +39,9 @@ spring:
           uri: http://${NOTIFICATION_SERVICE_HOST:localhost}:8088
           predicates:
             - Path=/api/v1/notifications/**
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+        - RemoveResponseHeader=Access-Control-Allow-Credentials
       globalcors:
         corsConfigurations:
           '[/**]':

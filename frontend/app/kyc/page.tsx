@@ -18,6 +18,7 @@ export default function KycPage() {
   const kycStatus = data?.data?.data;
 
   const [form, setForm] = useState({ documentType: 'PASSPORT', documentNumber: '', documentUrl: '', expiryDate: '' });
+  const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,10 +27,22 @@ export default function KycPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    if (!file) {
+      setError('Please select a file to upload.');
+      return;
+    }
+
     setLoading(true);
     try {
-      await userService.uploadDocument(form);
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadRes = await userService.uploadFile(formData);
+      const documentUrl = uploadRes.data.data.url;
+
+      await userService.uploadDocument({ ...form, documentUrl });
       setSuccess('Document uploaded successfully. Pending review.');
+      setFile(null);
       mutate('/kyc/status');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Upload failed.');
@@ -106,14 +119,25 @@ export default function KycPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">Document URL</label>
-                <input
-                  required
-                  value={form.documentUrl}
-                  onChange={e => setForm({ ...form, documentUrl: e.target.value })}
-                  className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                  placeholder="https://storage.example.com/doc.pdf"
-                />
+                <label className="block text-sm text-slate-400 mb-1">Document File</label>
+                <label className="flex items-center justify-center w-full h-28 border-2 border-dashed border-slate-600 rounded-lg cursor-pointer bg-slate-900 hover:border-blue-500 transition-colors">
+                  <div className="text-center">
+                    {file ? (
+                      <p className="text-white text-sm">{file.name}</p>
+                    ) : (
+                      <>
+                        <p className="text-slate-400 text-sm">Click to select a file</p>
+                        <p className="text-slate-500 text-xs mt-1">PDF, JPG, PNG up to 10MB</p>
+                      </>
+                    )}
+                  </div>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={e => setFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
               </div>
               <div>
                 <label className="block text-sm text-slate-400 mb-1">Expiry Date (optional)</label>

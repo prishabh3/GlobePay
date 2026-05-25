@@ -196,6 +196,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8082:8082"
+    volumes:
+      - kyc-uploads:/uploads/kyc
     environment:
       DB_HOST: postgres-user
       DB_PORT: 5432
@@ -324,3 +326,6 @@ services:
       kafka:
         condition: service_healthy
     restart: on-failure
+
+volumes:
+  kyc-uploads:

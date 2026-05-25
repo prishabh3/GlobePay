@@ -22,8 +22,9 @@ public class UserProfileController {
     @GetMapping("/me")
     @Operation(summary = "Get current user profile")
     public ResponseEntity<ApiResponse<UserProfileResponse>> getMyProfile(
-            @RequestHeader("X-User-Id") String userId) {
-        return ResponseEntity.ok(ApiResponse.success(userProfileService.getProfile(userId)));
+            @RequestHeader("X-User-Id") String userId,
+            @RequestHeader(value = "X-User-Email", required = false) String email) {
+        return ResponseEntity.ok(ApiResponse.success(userProfileService.getOrCreateProfile(userId, email)));
     }
 
     @PutMapping("/me")

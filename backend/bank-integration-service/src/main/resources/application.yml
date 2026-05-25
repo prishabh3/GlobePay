@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: bank-integration-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
 
 resilience4j:
   circuitbreaker:

@@ -2,6 +2,7 @@ package com.globepay.gateway.filter;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -38,14 +39,17 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         String token = authHeader.substring(7);
         try {
+            byte[] keyBytes = jwtSecret.length() >= 64
+                    ? Decoders.BASE64.decode(jwtSecret)
+                    : jwtSecret.getBytes(StandardCharsets.UTF_8);
             Claims claims = Jwts.parser()
-                    .verifyWith(Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8)))
+                    .verifyWith(Keys.hmacShaKeyFor(keyBytes))
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
             
             ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
-                    .header("X-User-Id", claims.get("userId", String.class))
+                    .header("X-User-Id", claims.getSubject())
                     .header("X-User-Email", claims.get("email", String.class))
                     .build();
             return chain.filter(exchange.mutate().request(modifiedRequest).build());

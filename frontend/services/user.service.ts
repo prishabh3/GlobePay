@@ -5,6 +5,10 @@ export const userService = {
   getProfile: () => api.get<ApiResponse<UserProfile>>('/api/v1/users/me'),
   updateProfile: (data: Partial<UserProfile>) => api.put<ApiResponse<UserProfile>>('/api/v1/users/me', data),
   getKycStatus: () => api.get<ApiResponse<KycStatus>>('/api/v1/kyc/status'),
+  uploadFile: (formData: FormData) =>
+    api.post<ApiResponse<{ url: string }>>('/api/v1/kyc/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   uploadDocument: (data: { documentType: string; documentNumber: string; documentUrl: string; expiryDate?: string }) =>
     api.post<ApiResponse<KycDocument>>('/api/v1/kyc/documents', data),
   getAdminUsers: (page = 0, size = 20) =>

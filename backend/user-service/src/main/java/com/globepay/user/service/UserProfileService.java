@@ -27,6 +27,24 @@ public class UserProfileService {
     }
 
     @Transactional
+    public UserProfileResponse getOrCreateProfile(String userId, String email) {
+        return userProfileRepository.findById(userId)
+                .map(this::toResponse)
+                .orElseGet(() -> {
+                    log.warn("Profile missing for userId={}, creating lazily", userId);
+                    String safeEmail = email != null ? email : userId + "@unknown.com";
+                    UserProfile profile = UserProfile.builder()
+                            .userId(userId)
+                            .email(safeEmail)
+                            .firstName("User")
+                            .lastName("")
+                            .kycStatus(KycStatus.PENDING)
+                            .build();
+                    return toResponse(userProfileRepository.save(profile));
+                });
+    }
+
+    @Transactional
     public UserProfileResponse updateProfile(String userId, UserProfileRequest request) {
         UserProfile profile = findByIdOrThrow(userId);
         profile.setFirstName(request.getFirstName());
