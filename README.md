@@ -1,114 +1,177 @@
-# GlobePay — Production-Grade Fintech Microservices Platform
+# GlobePay — Cross-Border Fintech Platform
 
-A full-stack, event-driven fintech platform built with Spring Boot 3.2, Kafka, Redis, PostgreSQL, and Next.js 15.
+A full-stack, production-grade fintech platform built with **Spring Boot 3**, **Apache Kafka**, **Redis**, **PostgreSQL**, and **Next.js 16**. It demonstrates real-world microservices patterns: event-driven architecture, distributed locking, idempotency, JWT-based auth, KYC document verification, virtual card issuance, and credit scoring.
+
+---
+
+## Table of Contents
+
+1. [How it Works](#how-it-works)
+2. [Tech Stack](#tech-stack)
+3. [Architecture](#architecture)
+4. [Services at a Glance](#services-at-a-glance)
+5. [Kafka Event Flow](#kafka-event-flow)
+6. [Security Model](#security-model)
+7. [Reliability Patterns](#reliability-patterns)
+8. [Quick Start](#quick-start)
+9. [User Journey](#user-journey)
+10. [API Reference](#api-reference)
+11. [Database Layout](#database-layout)
+12. [Credit Scoring Algorithm](#credit-scoring-algorithm)
+13. [Running Tests](#running-tests)
+14. [Project Structure](#project-structure)
+15. [Common Issues](#common-issues)
+
+---
+
+## How it Works
+
+GlobePay lets users register, verify their identity (KYC), hold multi-currency wallets, send money to other users, issue virtual debit cards, and get a credit score — all behind a single API gateway.
+
+The backend is split into **9 independent microservices**. They never call each other directly. Instead they communicate through **Kafka topics**: when one service completes an action (e.g. KYC approved), it publishes an event, and every service that cares about it reacts independently. This means the system stays responsive even if one service is slow or temporarily down.
+
+The frontend is a Next.js app that talks exclusively to the API Gateway on port 8080. The gateway validates every JWT and injects the user's identity as headers before forwarding the request to the right service.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 16 (App Router), TypeScript, Tailwind CSS v4, SWR, Axios, Recharts |
+| API Gateway | Spring Cloud Gateway 4, JWT filter, CORS |
+| Microservices | Spring Boot 3.2, Spring Security, Spring Data JPA |
+| Messaging | Apache Kafka, Zookeeper |
+| Caching / Locking | Redis, Redisson (distributed locks) |
+| Database | PostgreSQL (one instance per service) |
+| Resilience | Resilience4j (circuit breaker + retry) |
+| Auth | JWT (JJWT), BCrypt password hashing |
+| Build | Maven multi-module (parent pom) |
+| Infrastructure | Docker, Docker Compose |
 
 ---
 
 ## Architecture
 
 ```
-                          ┌─────────────────────────────────────────────────────┐
-                          │                   Next.js 15 Frontend               │
-                          │  login · register · dashboard · transfer · kyc       │
-                          │  transactions · cards · admin                        │
-                          └───────────────────────┬─────────────────────────────┘
-                                                  │ HTTP
-                                                  ▼
-                          ┌─────────────────────────────────────────────────────┐
-                          │              API Gateway  :8080                     │
-                          │  Spring Cloud Gateway · JWT validation filter        │
-                          │  Sets X-User-Id / X-User-Email headers downstream   │
-                          └────────┬──────────┬──────────┬──────────┬───────────┘
-                                   │          │          │          │
-              ┌────────────────────┘          │          │          └─────────────────────┐
-              ▼                               ▼          ▼                                ▼
-  ┌──────────────────┐          ┌─────────────────┐  ┌──────────────────┐   ┌────────────────────┐
-  │  auth-service    │          │  user-service   │  │  wallet-service  │   │ transaction-service│
-  │  :8081           │          │  :8082          │  │  :8083           │   │  :8084             │
-  │  JWT · BCrypt    │          │  KYC · profiles │  │  multi-currency  │   │  transfers · refund│
-  └──────────────────┘          └────────┬────────┘  │  Redis locks     │   │  idempotency cache │
-                                         │           └────────┬─────────┘   └─────────┬──────────┘
-                                         │                    │                        │
-                                ─────────┴────────────────────┴────────────────────────┴─────────
-                                                    Kafka Topics
-                                   user-registered · kyc-approved · money-transferred · card-issued
-                                ─────────┬────────────────────┬────────────────────────┬─────────
-                                         │                    │                        │
-              ┌──────────────────────────▼───┐  ┌────────────▼──────────┐  ┌──────────▼──────────┐
-              │  credit-scoring-service :8085 │  │  card-service  :8086  │  │ notification-service│
-              │  ML-style scoring · limits    │  │  virtual cards · CVV  │  │  :8088  e-mail      │
-              └───────────────────────────────┘  └───────────────────────┘  └─────────────────────┘
+                     ┌───────────────────────────────────────────────────────┐
+                     │                Next.js 16 Frontend                    │
+                     │  login · register · dashboard · transfer · kyc        │
+                     │  transactions · cards · admin                         │
+                     └─────────────────────────┬─────────────────────────────┘
+                                               │ HTTPS / REST
+                                               ▼
+                     ┌───────────────────────────────────────────────────────┐
+                     │              API Gateway  :8080                       │
+                     │  Spring Cloud Gateway · JWT validation filter          │
+                     │  Injects X-User-Id and X-User-Email headers           │
+                     └──────┬──────────┬──────────┬──────────┬──────────────┘
+                            │          │          │          │
+         ┌──────────────────┘          │          │          └──────────────────────┐
+         ▼                             ▼          ▼                                 ▼
+┌─────────────────┐      ┌─────────────────┐  ┌──────────────────┐   ┌────────────────────┐
+│  auth-service   │      │  user-service   │  │  wallet-service  │   │ transaction-service│
+│  :8081          │      │  :8082          │  │  :8083           │   │  :8084             │
+│  JWT · BCrypt   │      │  KYC · profiles │  │  multi-currency  │   │  transfers · refund│
+│  token refresh  │      │  file uploads   │  │  Redis locks     │   │  idempotency cache │
+└─────────────────┘      └────────┬────────┘  └────────┬─────────┘   └──────────┬─────────┘
+                                  │                    │                         │
+                    ──────────────┴────────────────────┴─────────────────────────┴──────────
+                                                Kafka Topics
+                          user-registered · kyc-approved · money-transferred · card-issued
+                    ──────────────┬────────────────────┬─────────────────────────┬──────────
+                                  │                    │                         │
+         ┌────────────────────────▼──┐  ┌─────────────▼──────────┐  ┌───────────▼──────────┐
+         │ credit-scoring-service    │  │  card-service  :8086   │  │ notification-service  │
+         │ :8085 score · risk · limit│  │  virtual cards · freeze│  │ :8088  email alerts   │
+         └───────────────────────────┘  └────────────────────────┘  └───────────────────────┘
 
-              ┌─────────────────────────────────┐
-              │  bank-integration-service  :8087 │
-              │  Circuit breaker · Retry          │
-              │  Loan approval simulation         │
-              └─────────────────────────────────┘
+         ┌───────────────────────────────────┐
+         │  bank-integration-service  :8087  │
+         │  Circuit breaker · Retry           │
+         │  Loan approval simulation          │
+         └───────────────────────────────────┘
 ```
 
 ---
 
-## Services
+## Services at a Glance
 
-| Service | Port | Responsibility |
+| Service | Port | What it does |
 |---|---|---|
-| api-gateway | 8080 | JWT validation, request routing |
-| auth-service | 8081 | Registration, login, token refresh |
-| user-service | 8082 | User profiles, KYC document management |
-| wallet-service | 8083 | Multi-currency wallets, currency conversion |
-| transaction-service | 8084 | P2P transfers, refunds, transaction history |
-| credit-scoring-service | 8085 | Income/employment based credit scoring |
-| card-service | 8086 | Virtual card issuance, freeze/unfreeze |
-| bank-integration-service | 8087 | External bank simulation with resilience patterns |
-| notification-service | 8088 | Email notifications via Kafka events |
+| **api-gateway** | 8080 | Single entry point. Validates JWT, routes requests, injects user identity headers |
+| **auth-service** | 8081 | User registration, login, JWT issuance, token refresh |
+| **user-service** | 8082 | User profiles, KYC document upload and review, admin user management |
+| **wallet-service** | 8083 | Multi-currency wallets, balance operations with distributed locks, currency conversion |
+| **transaction-service** | 8084 | P2P money transfers with idempotency, transaction history, refunds |
+| **credit-scoring-service** | 8085 | Income and employment-based credit scoring, risk classification, credit limits |
+| **card-service** | 8086 | Virtual debit card issuance, freeze, unfreeze, and cancellation |
+| **bank-integration-service** | 8087 | Simulated external bank calls with circuit breaker and retry |
+| **notification-service** | 8088 | Listens to Kafka events and sends email notifications |
 
 ---
 
 ## Kafka Event Flow
 
+Services are **completely decoupled**. When something important happens, a service publishes an event and moves on. Other services react to it independently.
+
 ```
 User registers
-  └─► user-registered
-        ├─► user-service       creates UserProfile
+  └─► Publishes:  user-registered
+        ├─► user-service          creates UserProfile row
         └─► notification-service  sends welcome email
 
 Admin approves KYC
-  └─► kyc-approved
-        ├─► wallet-service     provisions USD + INR wallets
-        ├─► credit-scoring-service  initialises credit profile
-        └─► notification-service  sends approval email
+  └─► Publishes:  kyc-approved
+        ├─► wallet-service           auto-provisions USD + INR wallets
+        ├─► credit-scoring-service   initialises credit profile
+        └─► notification-service     sends approval email to user
 
 Transfer completes
-  └─► money-transferred
-        └─► notification-service  emails sender + recipient
+  └─► Publishes:  money-transferred
+        └─► notification-service  emails both sender and recipient
 
 Card issued
-  └─► card-issued
-        └─► notification-service  emails card details
+  └─► Publishes:  card-issued
+        └─► notification-service  emails card details to user
 ```
+
+> **Why Kafka?** If `notification-service` is down during registration, it will pick up the `user-registered` event as soon as it comes back online — no message is lost. This is the key advantage of event-driven design over direct REST calls between services.
 
 ---
 
 ## Security Model
 
-Every service is **stateless** (no sessions). The API Gateway validates the JWT, then injects:
-- `X-User-Id` — extracted from the token subject
-- `X-User-Email` — extracted from a custom claim
+The platform uses **stateless JWT authentication** — no sessions, no cookies.
 
-Downstream services read these headers via `GatewayAuthFilter` and populate the Spring `SecurityContext`. Services never re-validate the JWT — only the gateway does.
+### How it works step by step
+
+1. User logs in via `auth-service`, receives an `accessToken` (15 min) and `refreshToken` (7 days)
+2. Every subsequent request carries `Authorization: Bearer <accessToken>`
+3. The **API Gateway** intercepts every request, validates the JWT signature and expiry
+4. If valid, the gateway extracts the user's identity and injects two headers before forwarding:
+   - `X-User-Id` — the user's UUID (from the JWT `sub` claim)
+   - `X-User-Email` — the user's email (from a custom JWT claim)
+5. Downstream services **never validate the JWT themselves** — they simply read `X-User-Id` and trust the gateway
+6. When the `accessToken` expires, the frontend automatically calls `/auth/refresh` using the `refreshToken`
+
+### Roles
+
+Users can have `ROLE_USER` or `ROLE_ADMIN`. Admin routes (KYC review, user list) are protected by role checks in the respective services.
 
 ---
 
-## Key Reliability Patterns
+## Reliability Patterns
 
-| Pattern | Where used |
-|---|---|
-| Distributed locking (Redisson) | wallet-service debit/credit operations |
-| Optimistic locking (`@Version`) | Wallet entity — prevents lost updates |
-| Idempotency keys (Redis + DB) | transaction-service — 24 h TTL prevents duplicate transfers |
-| Circuit breaker + Retry (Resilience4j) | bank-integration-service external calls |
-| Kafka at-least-once delivery | all event producers |
-| Soft delete (`is_deleted` flag) | all JPA entities via shared `AuditEntity` |
+| Pattern | Where | Why |
+|---|---|---|
+| **Distributed locking (Redisson)** | wallet-service | Prevents two concurrent requests from double-spending the same wallet balance |
+| **Optimistic locking (`@Version`)** | Wallet JPA entity | Database-level guard against lost updates |
+| **Idempotency keys** | transaction-service | Client sends a unique key; duplicate requests within 24 h return the same result without re-executing the transfer |
+| **Circuit breaker + Retry (Resilience4j)** | bank-integration-service | Stops hammering a failing external service; retries with backoff |
+| **Kafka at-least-once delivery** | all event producers | Events are guaranteed to be delivered; consumers are written to handle duplicates |
+| **Lazy profile creation** | user-service | If Kafka delivers `user-registered` late (startup rebalancing), the profile is created on the first API call instead — no user is ever stuck |
+| **Soft delete** | all JPA entities | Records are never physically deleted; an `is_deleted` flag is set and a `@Where` filter hides them from queries |
 
 ---
 
@@ -116,20 +179,30 @@ Downstream services read these headers via `GatewayAuthFilter` and populate the 
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- Java 21+ (for local development)
-- Node.js 18+ (for frontend)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (includes Docker Compose)
+- Node.js 18+
+- Java 21+ *(only needed if you want to run services outside Docker)*
 
-### 1. Start all infrastructure and services
+### Step 1 — Start everything with Docker
 
 ```bash
 cd docker
 docker compose up --build
 ```
 
-This starts PostgreSQL (one instance per service), Kafka, Redis, Zookeeper, and all 9 Spring Boot services.
+This starts **19 containers**: PostgreSQL (7 instances), Kafka, Zookeeper, Redis, and all 9 Spring Boot services.
 
-### 2. Start the frontend
+> First build takes ~5 minutes. Subsequent starts are fast.
+
+Wait until you see lines like:
+```
+auth-service     | Started AuthServiceApplication in 4.2 seconds
+wallet-service   | Started WalletServiceApplication in 3.8 seconds
+```
+
+### Step 2 — Start the frontend
+
+Open a new terminal:
 
 ```bash
 cd frontend
@@ -137,130 +210,265 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open **http://localhost:3000** in your browser.
 
-### 3. Register and explore
+### Step 3 — Create an admin user
 
-1. Register at `/register`
-2. Log in at `/login`
-3. Go to `/kyc` — upload a document (enter any URL, e.g. `https://example.com/doc.pdf`)
-4. An admin must approve KYC at `/admin` (log in as a user with `ROLE_ADMIN`)
-5. After KYC approval, wallets are auto-provisioned — check `/dashboard`
-6. Send money at `/transfer` using wallet IDs from the dashboard
-7. Issue virtual cards at `/cards`
-8. View transaction history at `/transactions`
+All registered users start as `ROLE_USER`. To promote a user to admin, connect to the auth database:
+
+```bash
+docker exec -it postgres-auth psql -U postgres -d postgres
+```
+
+```sql
+-- Replace with your registered user's email
+UPDATE users
+SET roles = 'ROLE_USER,ROLE_ADMIN'
+WHERE email = 'your@email.com';
+```
 
 ---
 
-## Database Layout
+## User Journey
 
-Each service has its own PostgreSQL instance (ports 5433–5439). There is no shared schema.
+Here is the complete end-to-end flow from registration to sending money.
 
-| Service | Port | Database |
-|---|---|---|
-| auth-service | 5433 | postgres-auth |
-| user-service | 5434 | postgres-user |
-| wallet-service | 5435 | postgres-wallet |
-| transaction-service | 5436 | postgres-tx |
-| credit-scoring-service | 5437 | postgres-credit |
-| card-service | 5438 | postgres-card |
-| notification-service | 5439 | postgres-notification |
+### 1. Register
+Go to `/register`. Fill in your name, email, and a password (minimum 8 characters). You will land on the login page.
+
+### 2. Log In
+Go to `/login`. After logging in you are taken to the dashboard. Wallets will appear once KYC is approved.
+
+### 3. Submit KYC
+Go to `/kyc`. Choose a document type (Passport, National ID, etc.), enter the document number, optionally set an expiry date, and **upload a file** (PDF, JPG, or PNG up to 10 MB). The file is stored on the server and a download URL is saved.
+
+### 4. Approve KYC (admin)
+Log in as an admin and go to `/admin → Pending KYC`. Click **Approve** next to the pending user — a confirmation dialog will ask you to confirm before the action executes.
+
+Behind the scenes, `user-service` publishes a `kyc-approved` Kafka event. `wallet-service` listens and automatically provisions a **USD wallet** and an **INR wallet** for the approved user.
+
+### 5. Dashboard
+Return to `/dashboard` as the approved user. You will now see:
+- Your wallets with formatted balances and copyable IDs
+- A **7-day spending area chart** showing transaction activity
+- Your **credit score**, risk level, and credit limit
+- Recent transactions with amounts and statuses
+
+### 6. Send Money
+Go to `/transfer`. Select your source wallet (the available balance is shown as a hint), paste the recipient's **Wallet ID** and **User ID** (both are copyable from the dashboard), enter an amount, and submit.
+
+A success card with the transaction ID appears, and a toast notification confirms the transfer.
+
+### 7. Issue a Virtual Card
+Go to `/cards`. Enter a cardholder name, choose a currency and optional spending limit, and click **Issue Virtual Card**.
+
+The card appears as a blue gradient card. **Click it to flip it** — the back shows the issue date and spending limit. From the back you can freeze/unfreeze or permanently cancel the card (both with confirmation dialogs).
+
+### 8. Transaction History
+Go to `/transactions`. Use the **search box** to find by ID, type, or description. Use the **Type** and **Status** dropdowns to filter. On mobile, transactions display as cards instead of a table. Every transaction ID has a copy button.
 
 ---
 
 ## API Reference
 
-All requests go through the gateway at `http://localhost:8080`.
+All requests go through the gateway at `http://localhost:8080`. Protected routes require `Authorization: Bearer <token>`.
 
-### Auth
+### Authentication
 
-| Method | Path | Auth |
-|---|---|---|
-| POST | `/api/v1/auth/register` | — |
-| POST | `/api/v1/auth/login` | — |
-| POST | `/api/v1/auth/refresh` | — |
-| GET | `/api/v1/auth/me` | Bearer |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/auth/register` | — | Register a new user |
+| POST | `/api/v1/auth/login` | — | Login, returns access + refresh tokens |
+| POST | `/api/v1/auth/refresh` | — | Exchange refresh token for new access token |
+| GET | `/api/v1/auth/me` | Bearer | Get authenticated user info |
 
-### Users / KYC
+**Register body:**
+```json
+{
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "email": "jane@example.com",
+  "password": "Secure1234"
+}
+```
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/v1/users/profile` | Get own profile |
-| POST | `/api/v1/users/kyc/documents` | Upload KYC document |
-| GET | `/api/v1/users/kyc/status` | Get KYC status + documents |
-| POST | `/api/v1/users/admin/kyc/{userId}/review` | Approve/reject KYC (admin) |
-| GET | `/api/v1/users/admin/users` | List all users (admin) |
+**Login response:**
+```json
+{
+  "accessToken": "eyJ...",
+  "refreshToken": "eyJ...",
+  "tokenType": "Bearer",
+  "userId": "uuid",
+  "email": "jane@example.com"
+}
+```
+
+---
+
+### Users & KYC
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/users/profile` | Bearer | Get own profile |
+| GET | `/api/v1/kyc/status` | Bearer | Get KYC status and submitted documents |
+| POST | `/api/v1/kyc/upload` | Bearer | Upload a document file (multipart/form-data, field: `file`) |
+| POST | `/api/v1/kyc/documents` | Bearer | Submit document metadata after upload |
+| GET | `/api/v1/users/admin/users?page=0&size=20` | Admin | Paginated list of all users |
+| POST | `/api/v1/users/admin/kyc/{userId}/review` | Admin | Approve or reject KYC |
+
+**Submit document body:**
+```json
+{
+  "documentType": "PASSPORT",
+  "documentNumber": "A1234567",
+  "documentUrl": "/api/v1/kyc/files/uuid_filename.jpg",
+  "expiryDate": "2030-01-01"
+}
+```
+
+**Review body:** `{ "approved": true }`
+
+---
 
 ### Wallets
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/v1/wallets` | Create wallet |
-| GET | `/api/v1/wallets` | List my wallets |
-| POST | `/api/v1/wallets/convert` | Currency conversion |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/wallets` | Bearer | Create a wallet |
+| GET | `/api/v1/wallets` | Bearer | List my wallets |
+| POST | `/api/v1/wallets/convert` | Bearer | Convert currency between wallets |
+
+**Create wallet:** `{ "currency": "EUR" }`
+
+---
 
 ### Transactions
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/v1/transactions/transfer` | Transfer funds |
-| GET | `/api/v1/transactions/history` | Paginated history |
-| GET | `/api/v1/transactions/{id}` | Single transaction |
-| POST | `/api/v1/transactions/{id}/refund` | Refund (admin) |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/transactions/transfer` | Bearer | Transfer funds |
+| GET | `/api/v1/transactions/history?page=0&size=20` | Bearer | Paginated history |
+| GET | `/api/v1/transactions/{id}` | Bearer | Single transaction |
+| POST | `/api/v1/transactions/{id}/refund` | Admin | Refund a transaction |
+
+**Transfer body:**
+```json
+{
+  "idempotencyKey": "any-unique-string-per-request",
+  "fromWalletId": "uuid",
+  "toWalletId": "uuid",
+  "toUserId": "uuid",
+  "amount": 100.00,
+  "currency": "USD",
+  "description": "Rent payment"
+}
+```
+
+---
 
 ### Cards
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/v1/cards` | Issue virtual card |
-| GET | `/api/v1/cards` | List my cards |
-| POST | `/api/v1/cards/{id}/freeze` | Freeze card |
-| POST | `/api/v1/cards/{id}/unfreeze` | Unfreeze card |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/cards` | Bearer | Issue a virtual card |
+| GET | `/api/v1/cards` | Bearer | List my cards |
+| POST | `/api/v1/cards/{id}/freeze` | Bearer | Freeze card |
+| POST | `/api/v1/cards/{id}/unfreeze` | Bearer | Unfreeze card |
+| DELETE | `/api/v1/cards/{id}` | Bearer | Cancel card permanently |
+
+**Issue card:** `{ "cardholderName": "JANE DOE", "currency": "USD", "spendingLimit": 1000 }`
+
+---
 
 ### Credit Scoring
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/v1/credit/assess` | Run credit assessment |
-| GET | `/api/v1/credit/score` | Get credit score |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/credit/assess` | Bearer | Run credit assessment |
+| GET | `/api/v1/credit/score` | Bearer | Get current credit score and limit |
+
+**Assess body:**
+```json
+{
+  "employmentStatus": "EMPLOYED",
+  "annualIncome": 75000,
+  "educationLevel": "BACHELORS",
+  "visaType": "WORK",
+  "university": "MIT"
+}
+```
+
+---
 
 ### Bank Integration
 
-| Method | Path | Description |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/bank/verify-account` | Bearer | Simulate verifying a bank account |
+| POST | `/api/v1/bank/loan/apply` | Bearer | Simulate a loan application |
+
+---
+
+## Database Layout
+
+Each service owns its own PostgreSQL database — **no shared schemas, no cross-database queries**. This is the database-per-service pattern that makes each service independently deployable.
+
+| Service | Postgres container | Host port |
 |---|---|---|
-| POST | `/api/v1/bank/verify-account` | Verify bank account |
-| POST | `/api/v1/bank/loan/apply` | Apply for loan |
+| auth-service | postgres-auth | 5433 |
+| user-service | postgres-user | 5434 |
+| wallet-service | postgres-wallet | 5435 |
+| transaction-service | postgres-tx | 5436 |
+| credit-scoring-service | postgres-credit | 5437 |
+| card-service | postgres-card | 5438 |
+| notification-service | postgres-notification | 5439 |
+
+**Connect to any database directly:**
+```bash
+# Example: inspect wallet balances
+docker exec -it postgres-wallet psql -U postgres -d postgres
+SELECT id, currency, balance, status FROM wallets;
+```
 
 ---
 
 ## Credit Scoring Algorithm
 
-Scoring is deterministic and transparent:
+Scoring is rule-based and fully transparent. Every factor adds a fixed number of points to a base of 300.
 
 | Factor | Points |
 |---|---|
 | Base | 300 |
-| Employment: EMPLOYED | +200 |
-| Employment: SELF_EMPLOYED | +150 |
-| Employment: RETIRED | +120 |
-| Employment: STUDENT | +100 |
-| Employment: UNEMPLOYED | +30 |
-| Annual income ≥ $100k | +200 |
-| Annual income ≥ $50k | +150 |
-| Annual income ≥ $25k | +100 |
-| Annual income ≥ $10k | +60 |
-| Education: PhD | +150 |
-| Education: Masters | +120 |
-| Education: Bachelors | +90 |
-| Visa: Permanent/Citizen | +100 |
-| Visa: Work/H1B | +80 |
-| Visa: Student/F-1 | +50 |
-| University provided | +50 |
-| **Maximum** | **900** |
+| **Employment status** | |
+| EMPLOYED | +200 |
+| SELF_EMPLOYED | +150 |
+| RETIRED | +120 |
+| STUDENT | +100 |
+| UNEMPLOYED | +30 |
+| **Annual income** | |
+| ≥ $100,000 | +200 |
+| ≥ $50,000 | +150 |
+| ≥ $25,000 | +100 |
+| ≥ $10,000 | +60 |
+| **Education level** | |
+| PhD | +150 |
+| Masters | +120 |
+| Bachelors | +90 |
+| **Visa type** | |
+| Permanent resident / Citizen | +100 |
+| Work visa / H-1B | +80 |
+| Student visa / F-1 | +50 |
+| University name provided | +50 |
+| **Maximum possible** | **900** |
 
-Risk tiers: LOW (≥750) · MEDIUM (≥600) · HIGH (≥450) · VERY_HIGH (<450)
+**Risk tiers and credit limits:**
 
-Credit limit = annual income × multiplier (LOW: 50%, MEDIUM: 30%, HIGH: 15%, VERY_HIGH: 5%)
+| Score | Risk Level | Credit Limit |
+|---|---|---|
+| 750 – 900 | LOW | 50% of annual income |
+| 600 – 749 | MEDIUM | 30% of annual income |
+| 450 – 599 | HIGH | 15% of annual income |
+| 300 – 449 | VERY_HIGH | 5% of annual income |
 
 ---
 
@@ -268,14 +476,16 @@ Credit limit = annual income × multiplier (LOW: 50%, MEDIUM: 30%, HIGH: 15%, VE
 
 ```bash
 cd backend
-# Run tests for the three core services
 mvn clean test -pl shared,wallet-service,transaction-service,credit-scoring-service -am
 ```
 
-28 unit tests cover:
-- `WalletServiceTest` — debit/credit balance logic, locking, insufficient funds (10 tests)
-- `TransactionServiceTest` — transfer, Redis/DB idempotency, failure handling, refund (9 tests)
-- `CreditScoringServiceTest` — score boundaries, risk tiers, credit limits (9 tests)
+**28 unit tests across 3 services:**
+
+| Test class | Count | What is covered |
+|---|---|---|
+| `WalletServiceTest` | 10 | Debit/credit balance, distributed lock acquisition, insufficient funds rejection |
+| `TransactionServiceTest` | 9 | Transfer execution, Redis idempotency check, DB idempotency fallback, refund flow, failure handling |
+| `CreditScoringServiceTest` | 9 | Score boundaries for all input factors, risk tier thresholds, credit limit calculation |
 
 ---
 
@@ -284,23 +494,82 @@ mvn clean test -pl shared,wallet-service,transaction-service,credit-scoring-serv
 ```
 GlobePay/
 ├── backend/
-│   ├── pom.xml                     # Multi-module Maven parent
-│   ├── shared/                     # Shared library: events, exceptions, API response wrappers
-│   ├── api-gateway/
-│   ├── auth-service/
-│   ├── user-service/
-│   ├── wallet-service/
-│   ├── transaction-service/
-│   ├── credit-scoring-service/
-│   ├── card-service/
-│   ├── bank-integration-service/
-│   └── notification-service/
-├── frontend/                       # Next.js 15 App Router
-│   ├── app/                        # Pages: dashboard, transfer, kyc, cards, admin …
-│   ├── components/                 # Navbar, Card, Badge, LoadingSpinner
-│   ├── services/                   # Axios service wrappers per domain
-│   ├── lib/                        # auth.ts (JWT decode), api.ts (Axios instance)
-│   └── types/                      # TypeScript interfaces
+│   ├── pom.xml                          # Maven multi-module parent
+│   ├── shared/                          # Shared library used by all services
+│   │   ├── events/                      # Kafka event POJOs (UserRegisteredEvent, etc.)
+│   │   ├── exceptions/                  # Common exception types
+│   │   └── response/                    # ApiResponse and PagedResponse wrappers
+│   ├── api-gateway/                     # Spring Cloud Gateway + JWT filter
+│   ├── auth-service/                    # Registration, login, JWT
+│   ├── user-service/                    # Profiles, KYC, file upload
+│   ├── wallet-service/                  # Wallets, balances, currency conversion
+│   ├── transaction-service/             # Transfers, history, refunds
+│   ├── credit-scoring-service/          # Credit score and risk assessment
+│   ├── card-service/                    # Virtual cards
+│   ├── bank-integration-service/        # External bank simulation with resilience
+│   └── notification-service/            # Email via Kafka events
+│
+├── frontend/
+│   ├── app/                             # Next.js App Router pages
+│   │   ├── dashboard/page.tsx           # Wallets, 7-day chart, quick actions
+│   │   ├── transfer/page.tsx            # Send money
+│   │   ├── transactions/page.tsx        # History with search and filters
+│   │   ├── kyc/page.tsx                 # Document upload
+│   │   ├── cards/page.tsx               # Virtual cards with flip animation
+│   │   ├── admin/page.tsx               # KYC review and user management
+│   │   ├── login/page.tsx
+│   │   └── register/page.tsx
+│   ├── components/
+│   │   ├── layout/Navbar.tsx            # Sticky navbar with active route highlight
+│   │   └── ui/
+│   │       ├── Badge.tsx                # Status badges (ACTIVE, PENDING, FAILED…)
+│   │       ├── Card.tsx                 # White rounded card container
+│   │       ├── ConfirmDialog.tsx        # Modal for destructive actions
+│   │       ├── CopyButton.tsx           # Clipboard copy with checkmark feedback
+│   │       ├── EmptyState.tsx           # No-data states with icons and CTAs
+│   │       ├── LoadingSpinner.tsx
+│   │       └── Skeleton.tsx             # Animated placeholder loaders
+│   ├── contexts/
+│   │   └── ToastContext.tsx             # Global bottom-right toast notifications
+│   ├── services/                        # Axios wrappers, one file per domain
+│   │   ├── auth.service.ts
+│   │   ├── card.service.ts
+│   │   ├── credit.service.ts
+│   │   ├── transaction.service.ts
+│   │   ├── user.service.ts
+│   │   └── wallet.service.ts
+│   ├── lib/
+│   │   ├── api.ts                       # Axios instance with token refresh interceptor
+│   │   ├── auth.ts                      # JWT decode, isAuthenticated, isAdmin
+│   │   └── format.ts                    # formatCurrency, formatDate, truncate
+│   └── types/index.ts                   # TypeScript interfaces for all entities
+│
 └── docker/
-    └── docker-compose.yml          # All services + infrastructure
+    └── docker-compose.yml               # 19 containers: 7 Postgres + Kafka + Zookeeper + Redis + 9 services
 ```
+
+---
+
+## Common Issues
+
+**Port 8080 already in use**
+Another container or process holds the port. Find and stop it:
+```bash
+lsof -ti:8080 | xargs kill -9
+```
+
+**Kafka `NodeExistsException` on startup**
+Stale ZooKeeper state from a previous run. Wipe all volumes and restart:
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+**"User profile not found" after login**
+The Kafka `user-registered` event was missed during startup rebalancing. The service handles this automatically — it creates the profile on your first API call. Refresh the page once and it will work.
+
+**Wallets not appearing after KYC approval**
+The `kyc-approved` Kafka event triggers wallet provisioning asynchronously. Wait 5–10 seconds after the admin approves, then refresh the dashboard.
+
+**Registration fails with "password too short"**
+Passwords must be at least 8 characters. The form shows this hint below the password field.
